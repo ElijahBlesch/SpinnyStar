@@ -1,0 +1,59 @@
+### Axes
+axes.titlesize : large
+axes.titleweight: bold
+axes.labelsize : medium
+axes.formatter.use_mathtext : True
+
+### Lines
+lines.linewidth : 1.0
+lines.markersize : 10
+hatch.linewidth: 0.25
+
+patch.antialiased   : True
+
+### Ticks
+xtick.top: True
+xtick.bottom: True
+xtick.major.size: 4.0
+xtick.minor.size: 2.0
+xtick.major.width: 0.5
+xtick.minor.width: 0.5
+xtick.direction: in
+xtick.minor.visible: True
+xtick.major.top: True
+xtick.major.bottom: True
+xtick.minor.top: True
+xtick.minor.bottom: True
+xtick.major.pad: 5.0
+xtick.minor.pad: 5.0
+ytick.labelsize: medium
+
+ytick.left: True
+ytick.right: True
+ytick.major.size: 4.0
+ytick.minor.size: 2.0
+ytick.major.width: 0.5
+ytick.minor.width: 0.5
+ytick.direction: in
+ytick.minor.visible: True
+ytick.major.left: True
+ytick.major.right: True
+ytick.minor.left: True
+ytick.minor.right: True
+ytick.major.pad: 5.0
+ytick.minor.pad: 5.0
+xtick.labelsize: medium
+
+### Legend
+legend.frameon: False
+legend.fontsize: 10
+
+
+### Fonts
+mathtext.fontset : cm
+font.family: serif
+font.serif: cmr10
+font.size: 16
+
+### Saving figures
+path.simplify : True
