@@ -128,8 +128,11 @@ class SpinnyStar:
     
     ### INTERPOLATED ARRAYS ###
         ms_expansion_cutoff = np.where(self.radius_env > 1.5 * min(self.radius_env))[0]
-        ms_expansion_cutoff = ms_expansion_cutoff[ms_expansion_cutoff > np.argmin(self.radius_env)][0]
-        max_age = self.age[ms_expansion_cutoff]
+        ms_expansion_cutoff = ms_expansion_cutoff[ms_expansion_cutoff > np.argmin(self.radius_env)]
+        if ms_expansion_cutoff.size > 0:
+            max_age = self.age[ms_expansion_cutoff[0]]
+        else:
+            max_age = self.age[-1]
         
         if interpolate:
             #Set up fast interp
