@@ -27,7 +27,7 @@ def disk_locking(disk_locking_model, mass_frac):
 
     elif disk_locking_model == 'exponential':
         tau = np.random.exponential(scale=5.0)
-        return tau*1e6
+        return tau
     
     else:
         raise ValueError(f"Unknown disk locking model: '{disk_locking_model}'. ")

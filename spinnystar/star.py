@@ -181,6 +181,7 @@ class SpinnyStar:
     ###############################
     
     def two_zone_evolution(self, initial_period, wind_model, coupling_model, disk_locking_model,
+                         wind_const=4.5e47, coupling_const=3.5e-5, coupling_power=4.5,
                          rossby_saturation_threshold= 0.1, solar_rotation= 'avg',
                          use_mass_rate=True, use_moi_change=True, use_momentum_exchange=True, use_wind_braking=True,
                          coupling_data_path=None):
@@ -215,6 +216,7 @@ class SpinnyStar:
         term_*: ndarray                               per step angular velocity contribution
 
         NOTE: The convective core and radiative shell properties are combined into one core for two zone evolution
+        NOTE: Free parameter presets are set to the "test" wind_model and "Frictional_Torque" coupling_law
         """
         
         #ID for Tools
@@ -331,7 +333,8 @@ class SpinnyStar:
             elif coupling_model == 'Frictional_Torque' or coupling_model == 'Turbulence': 
                 if core_exists[i]:
                     J_fric[i] = coupling_laws.coupling(
-                                    model=self.model, coupling_model=coupling_model, data_path=coupling_data_path, mass=M,  
+                                    model=self.model, coupling_model=coupling_model, data_path=coupling_data_path, mass=M, 
+                                    coupling_const=coupling_const, coupling_power=coupling_power, 
                                     R_bcz=radius_core[i], T_bcz=T_bcz[i], rho_bcz=rho_bcz[i],
                                     omega_env=omega_env[i], omega_core=omega_core[i])
                     Omega_env_fric[i] = J_fric[i] * dt[i] / moi_env[i+1]
@@ -340,7 +343,7 @@ class SpinnyStar:
                     Omega_env_fric[i], Omega_core_fric[i] = 0, 0
             
         ### Windbraking Law ###
-            self.J_dot[i], Omega_wb[i] = wind_laws.wind_braking(wind_model, coupling_model, use_momentum_exchange, solar_rotation,
+            self.J_dot[i], Omega_wb[i] = wind_laws.wind_braking(wind_model, coupling_model, use_momentum_exchange, solar_rotation, wind_const,
                                     moi_core[i], moi_env[i], moi_env[i+1], omega_env[i],
                                     convec_turnover[i], rossby_saturation_threshold,
                                     dt[i], L[i], radius_env[i], M, T_eff[i], g[i], P[i], B[i])
@@ -419,6 +422,7 @@ class SpinnyStar:
     #################################                  
 
     def three_zone_evolution(self, initial_period, wind_model, coupling_model, disk_locking_model,
+                         wind_const=4.5e47, coupling_const=3.5e-5, coupling_power=4.5,
                          rossby_saturation_threshold= 0.1, solar_rotation= 'avg',
                          use_mass_rate=True, use_moi_change=True, use_momentum_exchange=True, use_wind_braking=True,
                          coupling_data_path=None):
@@ -579,7 +583,8 @@ class SpinnyStar:
             
             elif coupling_model == 'Frictional_Torque':
                 if shell_exists[i] and core_exists[i] :
-                    J_shell_env_fric[i], J_shell_core_fric[i] = coupling_laws.coupling(self.model, coupling_model, data_path= coupling_data_path, mass=M, 
+                    J_shell_env_fric[i], J_shell_core_fric[i] = coupling_laws.coupling(self.model, coupling_model, data_path= coupling_data_path, mass=M,
+                                                    coupling_const=coupling_const, coupling_power=coupling_power, 
                                                     R_bcz=radius_shell[i], R_brz=radius_core[i], T_bcz=T_bcz[i], T_brz=T_brz[i], 
                                                     omega_env=omega_env[i], omega_shell=omega_shell[i], omega_core=omega_core[i])
                     
@@ -589,7 +594,8 @@ class SpinnyStar:
                     Omega_core_fric[i] = -J_shell_core_fric[i] * dt[i] / moi_core[i+1]
                 
                 elif shell_exists[i] and not core_exists[i]:
-                    J_shell_env_fric[i], J_shell_core_fric[i] = coupling_laws.coupling(self.model, coupling_model, data_path= coupling_data_path, mass=M, 
+                    J_shell_env_fric[i], J_shell_core_fric[i] = coupling_laws.coupling(self.model, coupling_model, data_path= coupling_data_path, mass=M,
+                                                    coupling_const=coupling_const, coupling_power=coupling_power, 
                                                     R_bcz=radius_shell[i], T_bcz=T_bcz[i], T_brz=T_brz[i], omega_env=omega_env[i], omega_shell=omega_shell[i])
                     
                     Omega_env_fric[i] = J_shell_env_fric[i] * dt[i] / moi_env[i+1] 
@@ -600,10 +606,10 @@ class SpinnyStar:
                     Omega_env_fric[i], Omega_shell_env_fric[i], Omega_shell_core_fric[i], Omega_core_fric[i] = 0, 0, 0, 0
 
         ### Windbraking Law ###
-            self.J_dot[i], Omega_wb[i] = wind_laws.wind_braking(wind_model, coupling_model, use_momentum_exchange, solar_rotation,
-                                    moi_core_shell[i], moi_env[i], moi_env[i+1], omega_env[i],
-                                    convec_turnover[i], rossby_saturation_threshold,
-                                    dt[i], L[i], radius_env[i], M, T_eff[i], g[i], P[i], B[i])
+            self.J_dot[i], Omega_wb[i] = wind_laws.wind_braking(wind_model, coupling_model, use_momentum_exchange, solar_rotation, wind_const, 
+                                                                moi_core_shell[i], moi_env[i], moi_env[i+1], omega_env[i],
+                                                                convec_turnover[i], rossby_saturation_threshold,
+                                                                dt[i], L[i], radius_env[i], M, T_eff[i], g[i], P[i], B[i])
             #Windbraking Efficiency
             self.tau_wb[i] = (self.J_dot[i] / J_env[i])**(-1)
 

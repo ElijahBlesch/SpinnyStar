@@ -27,9 +27,10 @@ from . import constants as const
 
 data_dir = os.getcwd()
 
-def coupling(model, coupling_model, data_path, mass,
+def coupling(model, coupling_model, data_path, mass, coupling_const, coupling_power,
              R_bcz=0, R_brz=0, T_bcz=0, rho_bcz=0, T_brz=0, rho_brz=0, 
              omega_env=0, omega_shell=0, omega_core=0):
+
     solar_coupling = 22 * const.SEC_PER_MYR
     mass_frac = np.round((mass / const.M_SUN), 2)
     
@@ -75,8 +76,11 @@ def coupling(model, coupling_model, data_path, mass,
         if model == 'two_zone_evolution':
             mu = 1.6        #Mean Molecular Weight, Placeholder For now
             
-            f = (mass_frac)**4.5
-            eta = 3.50e-5 * f     # adjusted for mean molecular weight change
+            #f = (mass_frac)**4.5
+            #eta = 3.50e-5 * f     # adjusted for mean molecular weight change
+
+            f = mass_frac ** coupling_power
+            eta = coupling_const * f
             
             #Constants
             C = 9.0 * eta * (const.k_boltzmann**2 / const.e_esu**4) * ((mu * const.m_p) / 3.0)**0.5
@@ -87,11 +91,11 @@ def coupling(model, coupling_model, data_path, mass,
             return J_fric
         
         elif model == 'three_zone_evolution':
-            f = (mass_frac)**4.5
+            f = (mass_frac) ** coupling_power
 
         ### Shell-Envelope ###
             mu_es = 1.6           # Mean Molecular Weight, Placeholder For now
-            eta_es = 3.5e-5 * f   # Tacholine Thickness Ratio
+            eta_es = coupling_const * f   # Tacholine Thickness Ratio
             #Constants
             C_es = 9.0 * eta_es * (const.k_boltzmann**2 / const.e_esu**4) * ((mu_es * const.m_p) / 3.0)**0.5
             #Torque
@@ -99,7 +103,7 @@ def coupling(model, coupling_model, data_path, mass,
 
         ### Shell-Core ###
             mu_sc = 1.6           # Mean Molecular Weight, Placeholder For now
-            eta_sc = 2.5e-5 * f   # Tacholine Thickness Ratio
+            eta_sc = coupling_const * f   # Tacholine Thickness Ratio
             #Constants
             C_sc = 9.0 * eta_sc * (const.k_boltzmann**2 / const.e_esu**4) * ((mu_sc * const.m_p) / 3.0)**0.5
             #Torque

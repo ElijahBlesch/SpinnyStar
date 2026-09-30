@@ -5,7 +5,8 @@
 ### Solar Constants ###
 M_SUN   = 1.989e33      # g
 R_SUN   = 6.957e10      # cm
-L_SUN   = 3.828e33      # erg/s 
+L_SUN   = 3.828e33      # erg/s
+T_SUN   = 5772          # K 
 AGE_SUN = 4.603e9       #yr
 
 OMEGA_SUN     = 2.87e-6      # rad/s 

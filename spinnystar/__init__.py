@@ -18,6 +18,10 @@ from .plots import (
     plot_reference_gyrochrones,
 )
 
+from .stats import (
+    solar_wind_calibration,
+    chi2_staged_fit
+)
 __version__ = "0.1.0"
 
 __all__ = [
@@ -31,5 +35,6 @@ __all__ = [
     "plot_rotational_contributions",
     "plot_gyrochrones",
     "plot_reference_gyrochrones",
-    "save_rtrk",
+    "solar_wind_calibration",
+    "chi2_staged_fit"
 ]

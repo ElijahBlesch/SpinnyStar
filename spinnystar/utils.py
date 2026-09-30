@@ -52,8 +52,7 @@ def evolve_mass_batch(inputs):
     """
     Multiprocessing tool. Builds one SpinnyStar per mass and evolves per set of inputs
 
-    inputs : tuple
-        (mass, data_dir, star_inputs, model, evolution_inputs_list, indices)
+    inputs : tuple    (mass, data_dir, star_inputs, model, evolution_inputs_list, indices)
     """
     from types import SimpleNamespace
     from .star import SpinnyStar
