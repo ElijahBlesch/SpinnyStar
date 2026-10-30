@@ -133,6 +133,7 @@ class SpinnyStar:
             max_age = self.age[ms_expansion_cutoff[0]]
         else:
             max_age = self.age[-1]
+        max_age = min(max_age, 1.3e10)
         
         if interpolate:
             #Set up fast interp
@@ -248,12 +249,10 @@ class SpinnyStar:
         J_env, J_core = np.zeros(N), np.zeros(N)
         J_m_env, J_m_core = np.zeros(N), np.zeros(N)
         dJ = np.zeros(N)
-        J_fric = np.zeros(N)
         omega_env, omega_core = np.zeros(N), np.zeros(N)
         Omega_m_env, Omega_m_core = np.zeros(N), np.zeros(N)
         Omega_moi_env, Omega_moi_core = np.zeros(N), np.zeros(N)
-        Omega_env_coupling, Omega_core_coupling = np.zeros(N), np.zeros(N)
-        Omega_env_fric, Omega_core_fric = np.zeros(N), np.zeros(N)
+        Omega_env_exchange, Omega_core_exchange = np.zeros(N), np.zeros(N)
         Omega_wb = np.zeros(N)
         env_momentum_exchange, core_momentum_exchange = np.zeros(N), np.zeros(N)
         
@@ -272,16 +271,8 @@ class SpinnyStar:
         core_threshold = 2e-3 * M
         core_exists = (mass_core > core_threshold) & (moi_core > 2 * self.replace_core)
 
-        #Coupling and Disk Locking Models
+        #Disk Locking Models
         self.disk_locking = disk_locking_laws.disk_locking(disk_locking_model, self.mass)
-        if coupling_model != 'Frictional_Torque':
-            self.coupling = coupling_laws.coupling(
-                model=self.model, coupling_model=coupling_model, data_path=coupling_data_path, mass=M)
-        elif coupling_model == 'Frictional_Torque':
-            self.coupling = 0
-        elif coupling_model == 'Turbulence':
-            self.coupling = 0
-        
         
         for i in range(N-1):
             
@@ -302,9 +293,6 @@ class SpinnyStar:
             elif dM[i] < 0  and core_exists[i]:
                 J_m_env[i] = -(2/3) * dM[i] * radius_core[i]**2 * omega_core[i]
                 J_m_core[i] = (2/3) * dM[i] * radius_core[i]**2 * omega_core[i]
-            elif dM[i] < 0  and not core_exists[i]:
-                J_m_env[i] = -(2/5) * dM[i] * radius_core[i]**2 * omega_core[i]
-                J_m_core[i] = 0
             else:
                 J_m_env[i] = 0
                 J_m_core[i] = 0
@@ -322,25 +310,16 @@ class SpinnyStar:
                 Omega_moi_core[i] = 0 
 
         ### Coupling Term ###
-            if coupling_model != 'Frictional_Torque' and coupling_model != 'Turbulence':    
-                if core_exists[i]:
-                    dJ[i] = (moi_env[i] * J_core[i] - moi_core[i] * J_env[i]) / (moi_core[i] + moi_env[i])
-                    Omega_env_coupling[i] = (dJ[i] / self.coupling) * (dt[i] / moi_env[i+1])
-                    Omega_core_coupling[i] = -(dJ[i] / self.coupling) * (dt[i] / moi_core[i+1])
-                else: 
-                    Omega_env_coupling[i], Omega_core_coupling[i] = 0, 0
-
-            elif coupling_model == 'Frictional_Torque' or coupling_model == 'Turbulence': 
-                if core_exists[i]:
-                    J_fric[i] = coupling_laws.coupling(
-                                    model=self.model, coupling_model=coupling_model, data_path=coupling_data_path, mass=M, 
+            dJ[i] = (moi_env[i] * J_core[i] - moi_core[i] * J_env[i]) / (moi_core[i] + moi_env[i]) 
+            if core_exists[i]:
+                Omega_env_exchange[i], Omega_core_exchange[i] = coupling_laws.coupling(
+                                    model=self.model, coupling_model=coupling_model, data_path=coupling_data_path,
+                                    mass=M, dt=dt[i], moi_env_next=moi_env[i+1], moi_core_next=moi_core[i+1],
                                     coupling_const=coupling_const, coupling_power=coupling_power, 
                                     R_bcz=radius_core[i], T_bcz=T_bcz[i], rho_bcz=rho_bcz[i],
-                                    omega_env=omega_env[i], omega_core=omega_core[i])
-                    Omega_env_fric[i] = J_fric[i] * dt[i] / moi_env[i+1]
-                    Omega_core_fric[i] = - J_fric[i] * dt[i] / moi_core[i+1]
-                else:
-                    Omega_env_fric[i], Omega_core_fric[i] = 0, 0
+                                    omega_env=omega_env[i], omega_core=omega_core[i], dJ=dJ[i])
+            else:
+                Omega_env_exchange[i], Omega_core_exchange[i] = 0, 0
             
         ### Windbraking Law ###
             self.J_dot[i], Omega_wb[i] = wind_laws.wind_braking(wind_model, coupling_model, use_momentum_exchange, solar_rotation, wind_const,
@@ -356,18 +335,9 @@ class SpinnyStar:
             core_mass_rate_i = Omega_m_core[i] if (use_mass_rate and core_exists[i]) else 0.0
             env_moi_change_i = Omega_moi_env[i]  if use_moi_change else 0.0
             core_moi_change_i = Omega_moi_core[i] if use_moi_change else 0.0
-            env_coupling_i = Omega_env_coupling[i]  if use_momentum_exchange else 0.0
-            core_coupling_i = Omega_core_coupling[i] if use_momentum_exchange else 0.0
-            env_fric_i = Omega_env_fric[i]  if use_momentum_exchange else 0.0
-            core_fric_i = Omega_core_fric[i] if use_momentum_exchange else 0.0
+            env_momentum_exchange_i = Omega_env_exchange[i]  if use_momentum_exchange else 0.0
+            core_momentum_exchange_i = Omega_core_exchange[i] if use_momentum_exchange else 0.0
             wind_braking_i = Omega_wb[i] if use_wind_braking else 0.0
-
-            if coupling_model != 'Frictional_Torque' and coupling_model != 'Turbulence':
-                env_momentum_exchange_i = env_coupling_i
-                core_momentum_exchange_i = core_coupling_i
-            elif coupling_model == 'Frictional_Torque' or coupling_model == 'Turbulence':
-                env_momentum_exchange_i = env_fric_i
-                core_momentum_exchange_i = core_fric_i
 
             #Terms used in plots
             env_momentum_exchange[i] = env_momentum_exchange_i
@@ -381,9 +351,12 @@ class SpinnyStar:
                 omega_env[i+1] = omega_env[i]
                 omega_core[i+1] = omega_core[i] + core_mass_rate_i + core_moi_change_i
  
-            #Restart Core Rotation if it pops back into existence
+            #Core Birth 
             if core_exists[i+1] and (i == 0 or not core_exists[i]):
-                omega_core[i+1] = omega_env[i+1]
+                omega_env[i+1] = omega_core[i+1] = (moi_env[i+1]*omega_env[i+1]) / (moi_env[i+1] + moi_core[i+1])
+            #Core Death
+            if core_exists[i] and not core_exists[i+1]:
+                omega_env[i+1] = (moi_env[i+1]*omega_env[i+1] + moi_core[i+1]*omega_core[i+1] + J_m_core[i]) / moi_env[i+1]
 
 
         #Spinny Evolution Outputs
@@ -401,12 +374,16 @@ class SpinnyStar:
         self.mass_core, self.moi_core, self.radius_core = mass_core, moi_core, radius_core
 
         #Angular Momentum Check
+        detached = self.age[:-1] > self.disk_locking
+        wind_applied = detached & bool(use_wind_braking)
+        start = int(np.argmax(detached)) if detached.any() else 0
+
         J_star = J_env + J_core
         self.J_star = J_star[:-1]
-        self.J_wind = np.cumsum(self.J_dot[:-1] * dt)
+        self.J_wind = np.concatenate(([0.0], np.cumsum(np.where(wind_applied, self.J_dot[:-1] * dt, 0.0))[:-1]))
         self.J_total = self.J_star - self.J_wind
-        self.J_lost = self.J_total[0]-self.J_total[-1]
-       
+        self.J_lost = self.J_total[start] - self.J_total[-1]
+        self.J_frac_error = abs(self.J_lost) / abs(self.J_total[start])
 
         #Term Contributions Plot
         self.term_env_mass_rate = Omega_m_env[:-1]
@@ -481,13 +458,11 @@ class SpinnyStar:
         #Loop-Only Arrays
         J_env, J_shell, J_core = np.zeros(N), np.zeros(N), np.zeros(N)
         J_m_env, J_m_shell_env, J_m_shell_core, J_m_core = np.zeros(N), np.zeros(N), np.zeros(N), np.zeros(N)
-        dJ_shell_env = np.zeros(N)
-        J_shell_env_fric, J_shell_core_fric = np.zeros(N), np.zeros(N)
+        dJ_env_shell, dJ_shell_core = np.zeros(N), np.zeros(N)
         omega_env, omega_shell, omega_core = np.zeros(N), np.zeros(N), np.zeros(N)
         Omega_m_env, Omega_m_shell_env, Omega_m_shell_core, Omega_m_core = np.zeros(N), np.zeros(N), np.zeros(N), np.zeros(N)
         Omega_moi_env, Omega_moi_shell, Omega_moi_core = np.zeros(N), np.zeros(N), np.zeros(N)
-        Omega_env_coupling, Omega_shell_coupling = np.zeros(N), np.zeros(N)
-        Omega_env_fric, Omega_shell_env_fric, Omega_shell_core_fric, Omega_core_fric = np.zeros(N), np.zeros(N), np.zeros(N), np.zeros(N)
+        Omega_env_exchange, Omega_shell_env_exchange, Omega_shell_core_exchange, Omega_core_exchange  = np.zeros(N), np.zeros(N), np.zeros(N), np.zeros(N)
         Omega_wb = np.zeros(N)
         env_momentum_exchange, shell_env_momentum_exchange, shell_core_momentum_exchange, core_momentum_exchange = np.zeros(N), np.zeros(N), np.zeros(N), np.zeros(N)
         
@@ -509,13 +484,8 @@ class SpinnyStar:
         shell_exists = (mass_shell > shell_threshold) & (moi_shell > 2 * self.replace_shell)
         core_exists = (mass_core > core_threshold) & (moi_core > 2 * self.replace_core)
 
-
-        #Coupling and Disk Locking Models
+        #Disk Locking Models
         self.disk_locking = disk_locking_laws.disk_locking(disk_locking_model, self.mass)
-        if coupling_model != 'Frictional_Torque':
-            self.shell_env_coupling  = coupling_laws.coupling(
-                model=self.model, coupling_model=coupling_model, data_path=coupling_data_path, mass=M)
-
 
         for i in range(N-1):
 
@@ -573,37 +543,29 @@ class SpinnyStar:
                 Omega_moi_core[i] = 0
 
         ### Coupling Term ###
-            if coupling_model != 'Frictional_Torque':
-                if shell_exists[i]:
-                    dJ_shell_env[i] = (moi_env[i] * J_shell[i] - moi_shell[i] * J_env[i]) / (moi_shell[i] + moi_env[i])
-                    Omega_env_coupling[i] = (dJ_shell_env[i]/self.shell_env_coupling) * (dt[i] / moi_env[i+1])
-                    Omega_shell_coupling[i] = -(dJ_shell_env[i]/self.shell_env_coupling) * (dt[i] / moi_shell[i+1])
-                else: 
-                    Omega_env_coupling[i], Omega_shell_coupling[i] = 0, 0
-            
-            elif coupling_model == 'Frictional_Torque':
-                if shell_exists[i] and core_exists[i] :
-                    J_shell_env_fric[i], J_shell_core_fric[i] = coupling_laws.coupling(self.model, coupling_model, data_path= coupling_data_path, mass=M,
-                                                    coupling_const=coupling_const, coupling_power=coupling_power, 
-                                                    R_bcz=radius_shell[i], R_brz=radius_core[i], T_bcz=T_bcz[i], T_brz=T_brz[i], 
-                                                    omega_env=omega_env[i], omega_shell=omega_shell[i], omega_core=omega_core[i])
-                    
-                    Omega_env_fric[i] = J_shell_env_fric[i] * dt[i] / moi_env[i+1] 
-                    Omega_shell_env_fric[i] = -J_shell_env_fric[i] * dt[i] / moi_shell[i+1] 
-                    Omega_shell_core_fric[i] = J_shell_core_fric[i] * dt[i] / moi_shell[i+1]  
-                    Omega_core_fric[i] = -J_shell_core_fric[i] * dt[i] / moi_core[i+1]
-                
-                elif shell_exists[i] and not core_exists[i]:
-                    J_shell_env_fric[i], J_shell_core_fric[i] = coupling_laws.coupling(self.model, coupling_model, data_path= coupling_data_path, mass=M,
-                                                    coupling_const=coupling_const, coupling_power=coupling_power, 
-                                                    R_bcz=radius_shell[i], T_bcz=T_bcz[i], T_brz=T_brz[i], omega_env=omega_env[i], omega_shell=omega_shell[i])
-                    
-                    Omega_env_fric[i] = J_shell_env_fric[i] * dt[i] / moi_env[i+1] 
-                    Omega_shell_env_fric[i] = -J_shell_env_fric[i] * dt[i] / moi_shell[i+1] 
-                    Omega_shell_core_fric[i], Omega_core_fric[i] = 0,0
-                
-                elif not shell_exists[i] and not core_exists[i]:
-                    Omega_env_fric[i], Omega_shell_env_fric[i], Omega_shell_core_fric[i], Omega_core_fric[i] = 0, 0, 0, 0
+            #Env-Shell Coupling
+            dJ_env_shell[i] = (moi_env[i]*J_shell[i] - moi_shell[i]*J_env[i]) / (moi_shell[i] + moi_env[i])
+            if shell_exists[i]:
+                Omega_env_exchange[i], Omega_shell_env_exchange[i] = coupling_laws.coupling(
+                    coupling_model=coupling_model, data_path=coupling_data_path, mass=M,
+                    dt=dt[i], moi_env_next=moi_env[i+1], moi_core_next=moi_shell[i+1],
+                    coupling_const=coupling_const, coupling_power=coupling_power,
+                    R_bcz=radius_shell[i], T_bcz=T_bcz[i], rho_bcz=rho_bcz[i],
+                    omega_env=omega_env[i], omega_core=omega_shell[i], dJ=dJ_shell_env[i])
+            else:
+                Omega_env_exchange[i], Omega_shell_env_exchange[i] = 0, 0
+
+            #Shell-Core Coupling
+            dJ_shell_core[i] = (moi_shell[i]*J_core[i] - moi_core[i]*J_shell[i]) / (moi_core[i] + moi_shell[i])
+            if core_exists[i]:
+                Omega_shell_core_exchange[i], Omega_core_exchange[i] = coupling_laws.coupling(
+                    coupling_model=coupling_model, data_path=coupling_data_path, mass=M,
+                    dt=dt[i], moi_env_next=moi_shell[i+1], moi_core_next=moi_core[i+1],
+                    coupling_const=coupling_const, coupling_power=coupling_power,
+                    R_bcz=radius_core[i], T_bcz=T_brz[i], rho_bcz=rho_brz[i],
+                    omega_env=omega_shell[i], omega_core=omega_core[i], dJ=dJ_shell_core[i])
+            else:
+                Omega_shell_core_exchange[i], Omega_core_exchange[i] = 0, 0
 
         ### Windbraking Law ###
             self.J_dot[i], Omega_wb[i] = wind_laws.wind_braking(wind_model, coupling_model, use_momentum_exchange, solar_rotation, wind_const, 
@@ -621,24 +583,11 @@ class SpinnyStar:
             env_moi_change_i = Omega_moi_env[i]  if use_moi_change else 0.0
             shell_moi_change_i = Omega_moi_shell[i] if use_moi_change else 0.0
             core_moi_change_i = Omega_moi_core[i] if use_moi_change else 0.0
-            env_coupling_i = Omega_env_coupling[i]  if use_momentum_exchange else 0.0
-            shell_coupling_i = Omega_shell_coupling[i] if use_momentum_exchange else 0.0
-            env_fric_i = Omega_env_fric[i] if use_momentum_exchange else 0.0
-            shell_env_fric_i = Omega_shell_env_fric[i] if use_momentum_exchange else 0.0
-            shell_core_fric_i = Omega_shell_core_fric[i] if use_momentum_exchange else 0.0
-            core_fric_i = Omega_core_fric[i] if use_momentum_exchange else 0.0   
+            env_momentum_exchange_i = Omega_env_exchange[i]  if use_momentum_exchange else 0.0
+            shell_env_momentum_exchange_i = Omega_shell_env_exchange[i] if use_momentum_exchange else 0.0
+            shell_core_momentum_exchange_i = Omega_shell_core_exchange[i] if use_momentum_exchange else 0.0
+            core_momentum_exchange_i = Omega_core_exchange[i] if use_momentum_exchange else 0.0
             wind_braking_i = Omega_wb[i] if use_wind_braking else 0.0
-
-            if coupling_model != 'Frictional_Torque':
-                env_momentum_exchange_i = env_coupling_i
-                shell_env_momentum_exchange_i = shell_coupling_i
-                shell_core_momentum_exchange_i = 0
-                core_momentum_exchange_i = 0
-            elif coupling_model == 'Frictional_Torque':
-                env_momentum_exchange_i = env_fric_i
-                shell_env_momentum_exchange_i = shell_env_fric_i
-                shell_core_momentum_exchange_i = shell_core_fric_i
-                core_momentum_exchange_i = core_fric_i
 
             #Terms used in plots
             env_momentum_exchange[i] = env_momentum_exchange_i
@@ -656,11 +605,17 @@ class SpinnyStar:
                 omega_shell[i+1] = omega_shell[i] + shell_env_mass_rate_i + shell_core_mass_rate_i + shell_moi_change_i
                 omega_core[i+1] = omega_core[i] + core_mass_rate_i + core_moi_change_i
  
-            #Restart Core Rotation if it pops back into existence
-            if core_exists[i+1] and (i == 0 or not core_exists[i]):
-                omega_core[i+1] = omega_shell[i+1]
+            #Zone Birth
             if shell_exists[i+1] and (i == 0 or not shell_exists[i]):
-                omega_shell[i+1] = omega_env[i+1]
+                omega_env[i+1] = omega_shell[i+1] = moi_env[i+1]*omega_env[i+1] / (moi_env[i+1] + moi_shell[i+1])
+            if core_exists[i+1] and (i == 0 or not core_exists[i]):
+                omega_shell[i+1] = omega_core[i+1] = moi_shell[i+1]*omega_shell[i+1] / (moi_shell[i+1] + moi_core[i+1])
+
+            #Zone Death 
+            if core_exists[i] and not core_exists[i+1]:
+                omega_shell[i+1] = (moi_shell[i+1]*omega_shell[i+1] + moi_core[i+1]*omega_core[i+1] + J_m_core[i]) / moi_shell[i+1]
+            if shell_exists[i] and not shell_exists[i+1]:
+                omega_env[i+1] = (moi_env[i+1]*omega_env[i+1] + moi_shell[i+1]*omega_shell[i+1] + J_m_shell_env[i]) / moi_env[i+1]
 
         #Spinny Evolution Outputs
     
@@ -680,13 +635,17 @@ class SpinnyStar:
         self.mass_core, self.moi_core, self.radius_core = mass_core, moi_core, radius_core
 
         #Angular Momentum Check
+        detached = self.age[:-1] > self.disk_locking
+        wind_applied = detached & bool(use_wind_braking)
+        start = int(np.argmax(detached)) if detached.any() else 0
+
         J_star = J_env + J_shell + J_core
         self.J_star = J_star[:-1]
-        self.J_wind = np.cumsum(self.J_dot[:-1] * dt)
+        self.J_wind = np.concatenate(([0.0], np.cumsum(np.where(wind_applied, self.J_dot[:-1] * dt, 0.0))[:-1]))
         self.J_total = self.J_star - self.J_wind
-        self.J_lost = self.J_total[0]-self.J_total[-1]
+        self.J_lost = self.J_total[start] - self.J_total[-1]
+        self.J_frac_error = abs(self.J_lost) / abs(self.J_total[start])
        
-
         #Omega Contributions 
         self.term_env_moi_change = Omega_moi_env[:-1]
         self.term_shell_moi_change = Omega_moi_shell[:-1]
@@ -702,7 +661,7 @@ class SpinnyStar:
         self.term_core_momentum_exchange = core_momentum_exchange[:-1] 
 
     ####################
-    #Save to RTRK Files# <------ Broken
+    #Save to RTRK Files# 
     ####################
 
     def save_data(self, save_path=None):

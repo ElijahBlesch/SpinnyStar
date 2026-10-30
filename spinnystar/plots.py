@@ -42,7 +42,8 @@ def with_style(func):
 ##################
 
 @with_style  
-def plot_rotation_vs_age(star, primary_y= 'omega', solar_marker= True, solar_rotation= 'avg', plot_saturation= False, ax= None):
+def plot_rotation_vs_age(star, primary_y='omega', solar_marker=True, solar_rotation='avg', plot_saturation=False, 
+                         ax=None, format_ax=True, color=None, linestyle='-', label=None):
     """
     Plot rotational evolution (omega / period) for a single star
 
@@ -51,9 +52,15 @@ def plot_rotation_vs_age(star, primary_y= 'omega', solar_marker= True, solar_rot
     star: SpinnyStar         rotationally evolved star
     primary_y: str           rotational measure shown on left axis ('omega' / 'period')
     solar_marker: bool       mark the Sun's age (4.603e9 yrs) and rotation of choice
-    solar_rotation str       solar rotation measure of choice, average [27.28 d] or equitorial [25.67 d] ('avg' / 'eq')
+    solar_rotation: str      solar rotation measure of choice, average [27.28 d] or equitorial [25.67 d] ('avg' / 'eq')
     plot_saturation: bool    plot a dashed line at the age the star leaves saturation
+    
     ax: axes or None         target ax or new figure if None
+    format_ax: bool          if plotting mulitple calls of plot_rotation_vs_age on one figure, the first will set the format
+    color: str               different color per star
+    linestyle: str           different linestyle per star
+    label: str               different label per star
+
     """
     import matplotlib.pyplot as plt
     
@@ -61,34 +68,31 @@ def plot_rotation_vs_age(star, primary_y= 'omega', solar_marker= True, solar_rot
         return ['env', 'shell', 'core'] if (star.model == 'three_zone_evolution') else ['env', 'core']
 
     ax1 = ax if ax is not None else plt.subplots(figsize=(8, 5), layout='constrained')[1]
-    ax2 = ax1.twinx()
-
-    solar_period= {'eq': 25.67, 'avg': 27.28 }
     zone_style = {'env': ('Envelope', 'blue'), 'shell': ('Shell', 'green'), 'core': ('Core', 'red')}
-    
+
     for zone in zones(star):
-        label, color = zone_style[zone]
-        ax1.loglog(star.age / 1e6, getattr(star, f'{primary_y}_{zone}'), label=label, color=color)
+        zlabel, zcolor = zone_style[zone]
+        ax1.loglog(star.age / 1e6, getattr(star, f'{primary_y}_{zone}'),
+                   color=(color or zcolor), linestyle=linestyle,
+                   label=(label if label is not None else zlabel))
 
-    period_ax = ax2 if primary_y=='omega' else ax1
-    if solar_marker and solar_rotation in solar_period:
-        period_ax.plot(const.AGE_SUN/1e6, solar_period[solar_rotation], 'o', markerfacecolor='none', markeredgecolor='black')
-    
     if plot_saturation:
-        sat = np.argmin(np.abs(star.rossby_saturation_threshold - star.rossby_number))   
-        ax1.axvline(star.age[sat]/1e6, ls='--', color='black')
-        
-        
-    axis_label = {'omega': r'Angular Frequency [rad s$^{-1}$]', 'period': 'Period [d]'}
-    ax1.set_ylabel(axis_label[primary_y])
-    ax2.set_yscale('log')
-    other_y = 'period' if primary_y == 'omega' else 'omega'
-    ax2.set_ylabel(axis_label[other_y])
-    ax2.set_ylim([(2*np.pi)/(x*const.SEC_PER_DAY) for x in ax1.get_ylim()])
-    ax1.set_title(f"Rotational Evolution  ({star.mass} M$_\\odot$)", fontsize=15, fontweight="bold")
-    ax1.set_xlabel('Age [Myr]')
-    ax1.legend()
+        sat = np.argmin(np.abs(star.rossby_saturation_threshold - star.rossby_number))
+        ax1.axvline(star.age[sat] / 1e6, ls='--', color='black')
 
+    if format_ax:                                   # only the formatting call does all of this
+        ax2 = ax1.twinx()
+        solar_period = {'eq': 25.67, 'avg': 27.28}
+        period_ax = ax2 if primary_y == 'omega' else ax1
+        if solar_marker and solar_rotation in solar_period:
+            period_ax.plot(const.AGE_SUN/1e6, solar_period[solar_rotation], 'o',
+                           markerfacecolor='none', markeredgecolor='black')
+        axis_label = {'omega': r'Angular Frequency [rad s$^{-1}$]', 'period': 'Period [d]'}
+        other_y = 'period' if primary_y == 'omega' else 'omega'
+        ax1.set_ylabel(axis_label[primary_y]); ax1.set_xlabel('Age [Myr]')
+        ax2.set_yscale('log'); ax2.set_ylabel(axis_label[other_y])
+        ax2.set_ylim([(2*np.pi)/(x*const.SEC_PER_DAY) for x in ax1.get_ylim()])
+        ax1.legend()
     return ax1
 
 @with_style  

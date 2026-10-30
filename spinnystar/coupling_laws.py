@@ -27,9 +27,12 @@ from . import constants as const
 
 data_dir = os.getcwd()
 
-def coupling(model, coupling_model, data_path, mass, coupling_const, coupling_power,
+def coupling(model, coupling_model, data_path, 
+             mass, dt, moi_env_next, moi_core_next,
+             coupling_const, coupling_power,
              R_bcz=0, R_brz=0, T_bcz=0, rho_bcz=0, T_brz=0, rho_brz=0, 
-             omega_env=0, omega_shell=0, omega_core=0):
+             omega_env=0, omega_shell=0, omega_core=0,
+             dJ=0):
 
     solar_coupling = 22 * const.SEC_PER_MYR
     mass_frac = np.round((mass / const.M_SUN), 2)
@@ -37,7 +40,10 @@ def coupling(model, coupling_model, data_path, mass, coupling_const, coupling_po
     if coupling_model == 'SpadaPL':
         a = 5.6
         coupling = solar_coupling*(mass_frac)**-a
-        return coupling
+
+        Omega_env_exchange = (dJ / coupling) * (dt / moi_env_next)
+        Omega_core_exchange = -(dJ / coupling) * (dt / moi_core_next)
+        return Omega_env_exchange, Omega_core_exchange
     
     elif coupling_model == 'SpadaBPL':
         tau_0 = 565 * const.SEC_PER_MYR
@@ -47,7 +53,10 @@ def coupling(model, coupling_model, data_path, mass, coupling_const, coupling_po
             coupling = tau_0 * (mass_frac / 0.6)**-a 
         elif mass_frac >= 0.6:
             coupling = tau_0 * (mass_frac / 0.6)**-b 
-        return coupling
+        
+        Omega_env_exchange = (dJ / coupling) * (dt / moi_env_next)
+        Omega_core_exchange = -(dJ / coupling) * (dt / moi_core_next)
+        return Omega_env_exchange, Omega_core_exchange
     
     elif coupling_model == 'EnvGrowth':
         if data_path is None:
@@ -57,7 +66,10 @@ def coupling(model, coupling_model, data_path, mass, coupling_const, coupling_po
         stall_epoch_est = stall_int_curve(mass_frac)
         conv_growth_timescale = (stall_epoch_est[1] - stall_epoch_est[0]) * const.SEC_PER_GYR 
         convec_growth_end = (stall_epoch_est[1]) * const.SEC_PER_GYR
-        return conv_growth_timescale
+
+        Omega_env_exchange = (dJ / conv_growth_timescale) * (dt / moi_env_next)
+        Omega_core_exchange = -(dJ / conv_growth_timescale) * (dt / moi_core_next)
+        return Omega_env_exchange, Omega_core_exchange
     
     elif coupling_model == 'CoreTemp':
         if data_path is None:
@@ -66,14 +78,21 @@ def coupling(model, coupling_model, data_path, mass, coupling_const, coupling_po
         temp_int_curve = interp1d(temp[:,0], temp[:,1:4], axis=0, kind="linear", bounds_error=False)
         temp_epoch_est = temp_int_curve(mass_frac)
         min_core_temp = temp_epoch_est[0] * const.SEC_PER_GYR
-        return min_core_temp
+        
+        Omega_env_exchange = (dJ / min_core_temp) * (dt / moi_env_next)
+        Omega_core_exchange = -(dJ / min_core_temp) * (dt / moi_core_next)
+        return Omega_env_exchange, Omega_core_exchange
         
     elif coupling_model == 'test':
-        coupling = 28*(mass_frac)**-6.2 #33.05, 6.2
-        return coupling * const.SEC_PER_MYR
+        #cc=28, cp=-6.2
+        #cc=33.05, cp=-6.02
+        coupling = coupling_const*const.SEC_PER_MYR*(mass_frac)**-coupling_power
+        
+        Omega_env_exchange = (dJ / coupling) * (dt / moi_env_next)
+        Omega_core_exchange = -(dJ / coupling) * (dt / moi_core_next)
+        return Omega_env_exchange, Omega_core_exchange
     
     elif coupling_model == 'Frictional_Torque':
-        if model == 'two_zone_evolution':
             mu = 1.6        #Mean Molecular Weight, Placeholder For now
             
             #f = (mass_frac)**4.5
@@ -88,28 +107,11 @@ def coupling(model, coupling_model, data_path, mass, coupling_const, coupling_po
             #Torque
             J_fric = C * T_bcz**(2.5) * R_bcz**3 * (omega_core - omega_env)
 
-            return J_fric
-        
-        elif model == 'three_zone_evolution':
-            f = (mass_frac) ** coupling_power
+            Omega_env_exchange = J_fric * dt / moi_env_next
+            Omega_core_exchange = - J_fric * dt / moi_core_next
 
-        ### Shell-Envelope ###
-            mu_es = 1.6           # Mean Molecular Weight, Placeholder For now
-            eta_es = coupling_const * f   # Tacholine Thickness Ratio
-            #Constants
-            C_es = 9.0 * eta_es * (const.k_boltzmann**2 / const.e_esu**4) * ((mu_es * const.m_p) / 3.0)**0.5
-            #Torque
-            J_shell_env_fric = C_es * T_bcz**(2.5) * R_bcz**3 * (omega_shell - omega_env)
+            return Omega_env_exchange, Omega_core_exchange
 
-        ### Shell-Core ###
-            mu_sc = 1.6           # Mean Molecular Weight, Placeholder For now
-            eta_sc = coupling_const * f   # Tacholine Thickness Ratio
-            #Constants
-            C_sc = 9.0 * eta_sc * (const.k_boltzmann**2 / const.e_esu**4) * ((mu_sc * const.m_p) / 3.0)**0.5
-            #Torque
-            J_shell_core_fric = C_sc * T_brz**(2.5) * R_brz**3 * (omega_core - omega_shell)
-
-            return J_shell_env_fric, J_shell_core_fric
 
     elif coupling_model == 'Turbulence':
         if model == 'two_zone_evolution':
