@@ -94,21 +94,20 @@ def coupling(model, coupling_model, data_path,
     
     elif coupling_model == 'Frictional_Torque':
             mu = 1.6        #Mean Molecular Weight, Placeholder For now
-            
-            #f = (mass_frac)**4.5
-            #eta = 3.50e-5 * f     # adjusted for mean molecular weight change
 
             f = mass_frac ** coupling_power
             eta = coupling_const * f
             
             #Constants
             C = 9.0 * eta * (const.k_boltzmann**2 / const.e_esu**4) * ((mu * const.m_p) / 3.0)**0.5
+            kappa = C * T_bcz**(2.5) * R_bcz**3 
 
-            #Torque
-            J_fric = C * T_bcz**(2.5) * R_bcz**3 * (omega_core - omega_env)
+            a = kappa * dt / moi_env_next
+            b = kappa * dt / moi_core_next
+            damp = 1.0 + a + b
+            Omega_env_exchange  =  a * (omega_core - omega_env) / damp
+            Omega_core_exchange = -b * (omega_core - omega_env) / damp
 
-            Omega_env_exchange = J_fric * dt / moi_env_next
-            Omega_core_exchange = - J_fric * dt / moi_core_next
 
             return Omega_env_exchange, Omega_core_exchange
 
